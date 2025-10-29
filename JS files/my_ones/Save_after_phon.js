@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 //import fragShader from './shaders/raycastShadow.frag.glsl?raw';  // import as text
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
-import { vec3 } from 'three/tsl';
 
 let renderer;
 if (!renderer) {
@@ -35,7 +34,7 @@ const NAMES101 = [
   'sphere',
   'weirdCube1',
 //  'ring',
-//  'cube',
+//  'cube'
 ];
 const light = new THREE.DirectionalLight(0xffffff);
 light.position.set(-50,0,0);
@@ -44,223 +43,7 @@ scene.add(light);
 
 const geometry = new THREE.BoxGeometry();
 var meshes = [];
-var edgesTheSuperVarible = {};
-
-function getMinMax() {
-  const overallBox = new THREE.Box3();
-
-  for (const mesh of meshes) {
-    const meshBox = new THREE.Box3().setFromObject(mesh);
-    overallBox.union(meshBox);
-  }
-  var X = {
-    minX: overallBox.min.x,
-    minY: overallBox.min.y,
-    minZ: overallBox.min.z,
-    maxX: overallBox.max.x,
-    maxY: overallBox.max.y,
-    maxZ: overallBox.max.z
-  };
-  edgesTheSuperVarible = X;
-  return X;
-}
-
-
-function filterFunction1(x,y,z){
-  var edges = {};
-  if(edgesTheSuperVarible == {}){
-    edges = getMinMax();
-  }else{
-    edges = edgesTheSuperVarible;
-  }
-
-  if(edges.minX <= x && edges.maxX >= x && edges.minY <= y && edges.maxY >= y && edges.minZ <= z && edges.maxZ >= z){
-    return false;
-  }else{
-    return true;
-  }
-}
-
-var cubeDexCoeffient = [1,1,1]; //the thing to divide the coord by to get the cube index value - after flooring
-
-function createCubdexStuff(numBoxes = 55) {
-
-    const B = getMinMax();  // expects {minX, minY, minZ, maxX, maxY, maxZ}
-    const xL = B.maxX - B.minX;
-    const yL = B.maxY - B.minY;
-    const zL = B.maxZ - B.minZ;
-    const cubeRoot = Math.cbrt(numBoxes);
-
-    let nx = Math.round(cubeRoot * (xL / Math.cbrt(xL * yL * zL)));
-    let ny = Math.round(cubeRoot * (yL / Math.cbrt(xL * yL * zL)));
-    let nz = Math.round(cubeRoot * (zL / Math.cbrt(xL * yL * zL)));
-
-    nx = Math.max(1, nx);
-    ny = Math.max(1, ny);
-    nz = Math.max(1, nz);
-
-    cubeDexCoeffient[0] = xL / nx;
-    cubeDexCoeffient[1] = yL / ny;
-    cubeDexCoeffient[2] = zL / nz;
-
-
-}
-
-function computeCoord(x, y, z) {
-  // in this, we are assuming the box is centered on origin / the offset for all x/y/z is 0, but we could do x-a etc in the lines
-  let ix = Math.floor((x) / cubeDexCoeffient[0]);
-  let iy = Math.floor((y) / cubeDexCoeffient[1]);
-  let iz = Math.floor((z) / cubeDexCoeffient[2]);
-
-  return { ix, iy, iz };
-}
-
-function createJSONcubdex(x,y,z){
-  return "(" + x + "," + y + "," + z + ")";
-}
-
-var theJSONstuff = {};
-
-function addItemToJSONSUPERSTUFF(key, value) {
-  if (key in theJSONstuff) {
-    theJSONstuff[key].push(value);
-  } else {
-    theJSONstuff[key] = [value]; 
-  }
-}
-
-function addPointToJSON(x,y,z){
-  var {cx, cy, cz} = computeCoord(x,y,z);
-  var coord = createJSONcubdex(cx, cy, cz);
-  addItemToJSONSUPERSTUFF(coord, new vec3(x,y,z));
-}
-
-
-function createJSON_stuff(){
-  var outJSON = {};
-  const overallBox = new THREE.Box3();
-  for(let a=0;a<meshes.length;a++){
-    let mesh = meshes[a];
-    const geometry = mesh.geometry;
-    const positionAttr = geometry.attributes.position;
-    const indexAttr = geometry.index ? geometry.index.array : null;
-    const vertex = new THREE.Vector3(); 
-    const meshBox = new THREE.Box3().setFromObject(mesh);
-    overallBox.union(meshBox);
-
-    if (indexAttr) {
-      for (let j = 0; j < indexAttr.length; j += 3) {
-        const triangle = [];
-        for (let k = 0; k < 3; k++) {
-          vertex.fromBufferAttribute(positionAttr, indexAttr[j + k]);
-          vertex.applyMatrix4(mesh.matrixWorld);
-            
-          const v = vertex.clone(); 
-          triangle.push(v);
-
-          const x = v.x;
-          const y = v.y;
-          const z = v.z;
-
-          addPointToJSON(x, y, z);
-          
-        }
-      }
-    } else {
-      // Non-indexed geometry
-      for (let j = 0; j < positionAttr.count; j += 3) {
-        const triangle = [];
-        for (let k = 0; k < 3; k++) {
-          vertex.fromBufferAttribute(positionAttr, j + k);
-          vertex.applyMatrix4(mesh.matrixWorld);
-          triangle.push(vertex.clone());
-//          access stuff here now
-        }
-      }
-    }
-  }
-}
-
-
-function collectMeshVertices(meshes) {
-  const allVertices = []; // store all vertices in world coordinates
-  const overallBox = new THREE.Box3(); // bounding box for all meshes
-
-  meshes.forEach(mesh => {
-
-
-    
-  });
-
-  return { allVertices, overallBox };
-}
-
-
-
-
-/*
-function loadCubdexes__afterMeshesLoaded(){
-  var output = {};
-  for(var i=0;i<meshes.length;i++){
-    var thisMesh = meshes[i];
-    var position = thisMesh.geometry.attributes.position;
-    var index = thisMesh.geometry.index ? thisMesh.geometry.index.array : null; //if it has an index, use that, else set it to null
-    var vertex = new THREE.Vector3();
-
-    const meshBox = new THREE.Box3().setFromObject(thisMesh);
-    overallBox.union(meshBox);
-
-    if(index){
-      for(let j=0;j<index.length;j+=3){
-        var triangles1 = [];
-        for(let k=0; k<3;k++){
-          vertex.fromBufferAttribute(position, index[j+k]);
-          vertex.applyMatrix4(thisMesh.matrixWorld); 
-          triangles1.push(vertex.clone());
-        }
-
-
-        if (vertex.x > 0.5 && vertex.y < 2.0) {
-          filteredPoints.push(vertex.clone());
-        }
-
-        // APPLY FILTERING CRITERIA HERE - push to output or catcher varible
-        if(false){
-
-        }
-      }
-
-    }else{
-
-      for(let j=0;j<position.count;j+=3){
-        var triangles1 = [];
-        for(let k=0; k<3;k++){
-          vertex.fromBufferAttribute(position, j+k);
-          vertex.applyMatrix4(thisMesh.matrixWorld); 
-          triangles1.push(vertex.clone());
-        }
-        // APPLY FILTERING CRITERIA HERE - push to output or catcher varible
-        
-      }
-    }
-  }
-}
-*/
-
-
-
-function testLoadFile(){
-
-  fetch('/models/json_objs/partitioned_ring.json')
-  .then(response => response.json())
-  .then(data => {
-    console.log('Loaded JSON:', data);
-  })
-  .catch(err => console.error('Error loading JSON:', err));
-
-}
-
-
+var jsonData = [];
 
 function extractTrianglesFromMesh(mesh) {
     let geom;
@@ -619,7 +402,7 @@ function loadMesh(url, scale = 0.03, position = new THREE.Vector3()) {
 function loadModelAndJSON(name, scale, pos) {
   return new Promise(res => {
     loader.load(`/models/${name}.obj`, obj => {
-      // Loading the matching JSON
+      // Load the matching JSON
       console.log("Time to search /models/json_objs/partitioned_${name[0]}.json");
       fetch(`/models/json_objs/partitioned_${name[0]}.json`)
         .then(r => r.json())
@@ -681,19 +464,6 @@ const spheremeshAsOBJ = meshes[1];
 
 var tickBool = 100;
 
-function setUpworld(){
-/*
-    Inital set up stuff
-    should include
-
-    cube index creation stuff - setting it all up 
-    then creation of the JSON type files
-*/  
-  
-  createCubdexStuff();
-
-}
-
 function animate() {
     if(tickkk<5000){
       requestAnimationFrame(animate);
@@ -722,22 +492,14 @@ function animate() {
       console.log("no movement yet");
     }
 
-
-
-   // loadCubdexes__afterMeshesLoaded();
       // end stuff
       finalSetUp() // update all the meshs ect
-      getMinMax(); // then find the new min and max`s
       console.log("Tick: ", elapsed);
       renderer.render(scene, camera);
       tickkk = tickkk+1;
     }
 }
 
-
-
-// maybe need to create a quick set up fucntion first around here
-setUpworld();
 animate();
 if (!renderer.capabilities.isWebGL2) {
   if (!renderer.extensions.get('OES_texture_float')) {
