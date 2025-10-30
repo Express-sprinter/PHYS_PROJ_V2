@@ -18,27 +18,37 @@ var globalModels = {};
  
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-camera.position.z = 15;
+camera.position.z = 120;
 
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
 //these state the position of the two objects for later - makes it easier to play with coordinatesh
-
+const scales = [
+  1,
+  0.1,
+];
 const startpos1 =[ 
-  new THREE.Vector3(9, 0, 0),
-  new THREE.Vector3(-9, 0, 0),
+  new THREE.Vector3(90, 0, 0),
+  new THREE.Vector3(-120, 0, 0),
   new THREE.Vector3(0, 7, 0),
   new THREE.Vector3(0,0, -8),
 ];
 const NAMES101 = [
-  'sphere',
-  'weirdCube1',
-//  'ring',
-//  'cube',
+//  'sphere',               // 2208 triangles
+//  'weirdCube1',           // 4240 triangles
+//  'ring',                 // 2304 triangles
+  'cube',                 // 12   triangles
+  '67p_low_res',          // 62908 traingles
+//  'cylinder1',            // 2820 triangles
+//  'pointyCone',           // 4896 triangles
+//  'shape1',               // 20   triangles
+//  'shape2',               // 1256 triangles
+
+
 ];
 const light = new THREE.DirectionalLight(0xffffff);
-light.position.set(-50,0,0);
+light.position.set(-5000,0,0);
 scene.add(light);
 
 
@@ -68,10 +78,10 @@ function getMinMax() {
 
 function filterFunction1(x,y,z){
   var edges = {};
-  if(edgesTheSuperVarible == {}){
-    edges = getMinMax();
+  if(!edgesTheSuperVarible.minX){
+      edges = getMinMax();
   }else{
-    edges = edgesTheSuperVarible;
+      edges = edgesTheSuperVarible;
   }
 
   if(edges.minX <= x && edges.maxX >= x && edges.minY <= y && edges.maxY >= y && edges.minZ <= z && edges.maxZ >= z){
@@ -108,9 +118,10 @@ function createCubdexStuff(numBoxes = 55) {
 
 function computeCoord(x, y, z) {
   // in this, we are assuming the box is centered on origin / the offset for all x/y/z is 0, but we could do x-a etc in the lines
-  let ix = Math.floor((x) / cubeDexCoeffient[0]);
-  let iy = Math.floor((y) / cubeDexCoeffient[1]);
-  let iz = Math.floor((z) / cubeDexCoeffient[2]);
+  let B = getMinMax();
+  let ix = Math.floor((x - B.minX) / cubeDexCoeffient[0]);
+  let iy = Math.floor((y - B.minY) / cubeDexCoeffient[1]);
+  let iz = Math.floor((z - B.minZ) / cubeDexCoeffient[2]);
 
   return { ix, iy, iz };
 }
@@ -130,9 +141,9 @@ function addItemToJSONSUPERSTUFF(key, value) {
 }
 
 function addPointToJSON(x,y,z){
-  var {cx, cy, cz} = computeCoord(x,y,z);
-  var coord = createJSONcubdex(cx, cy, cz);
-  addItemToJSONSUPERSTUFF(coord, new vec3(x,y,z));
+  var {ix, iy, iz} = computeCoord(x,y,z);
+  var coord = createJSONcubdex(ix, iy, iz);
+  addItemToJSONSUPERSTUFF(coord, new THREE.Vector3(x, y, z));
 }
 
 
@@ -173,12 +184,71 @@ function createJSON_stuff(){
         for (let k = 0; k < 3; k++) {
           vertex.fromBufferAttribute(positionAttr, j + k);
           vertex.applyMatrix4(mesh.matrixWorld);
-          triangle.push(vertex.clone());
-//          access stuff here now
+            
+          const v = vertex.clone(); 
+          triangle.push(v);
+
+          const x = v.x;
+          const y = v.y;
+          const z = v.z;
+
+          addPointToJSON(x, y, z);
         }
       }
     }
   }
+}
+
+function countMershes(){
+
+
+  /**
+   * for the sphere and weird cube meshes, we get around 6448 triangles via this method
+   */
+  var out = 0;
+  const overallBox = new THREE.Box3();
+  for(let a=0;a<meshes.length;a++){
+    let mesh = meshes[a];
+    const geometry = mesh.geometry;
+    const positionAttr = geometry.attributes.position;
+    const indexAttr = geometry.index ? geometry.index.array : null;
+    const vertex = new THREE.Vector3(); 
+    const meshBox = new THREE.Box3().setFromObject(mesh);
+    overallBox.union(meshBox);
+
+    if (indexAttr) {
+      for (let j = 0; j < indexAttr.length; j += 3) {
+        const triangle = [];
+        for (let k = 0; k < 3; k++) {
+          vertex.fromBufferAttribute(positionAttr, indexAttr[j + k]);
+          vertex.applyMatrix4(mesh.matrixWorld);
+            
+          const v = vertex.clone(); 
+          triangle.push(v);
+
+          
+          
+        }
+        out = out + 1;
+      }
+    } else {
+      // Non-indexed geometry
+      for (let j = 0; j < positionAttr.count; j += 3) {
+        const triangle = [];
+        for (let k = 0; k < 3; k++) {
+          vertex.fromBufferAttribute(positionAttr, j + k);
+          vertex.applyMatrix4(mesh.matrixWorld);
+            
+          const v = vertex.clone(); 
+          triangle.push(v);
+
+          
+        }
+        out = out + 1;
+      }
+    }
+  }
+  return out;
 }
 
 
@@ -637,7 +707,7 @@ function loadModelAndJSON(name, scale, pos) {
 
 
 Promise.all(
-  NAMES101.map((name, i) => loadModelAndJSON(name, 0.25, startpos1[i]))
+  NAMES101.map((name, i) => loadModelAndJSON(name, scales[i], startpos1[i]))
 ).then(loaded => {
   loaded.forEach(loadedItem => {
     const { name, obj, jsonData, scale, pos } = loadedItem;
@@ -657,13 +727,20 @@ Promise.all(
     });
   });
 
+
   finalSetUp();
 });
 
 function finalSetUp(){
+  // update the meshes list here
+  meshes.forEach(m => m.updateMatrixWorld(true));  // world transforms applied
 
-  // AFTER all are added, update world matrices
-  meshes.forEach(m => m.updateMatrixWorld(true));
+  //now stuff for the JSON / cube index stuff here
+  //createCubdexStuff(55);                             
+  //createJSON_stuff();                                
+  //console.log("Cube JSON ready:", theJSONstuff);
+
+  // this is all mesh related
   const triangleSets = meshes.map(m => extractTrianglesFromMeshWorld(m));
   const { out1: triV0, out2: triV1, out3: triV2 } = toThreeLists(triangleSets);
   const { texture, width, height, totalTris } = makeTriangleTexture(triV0, triV1, triV2);
@@ -690,21 +767,24 @@ function setUpworld(){
     then creation of the JSON type files
 */  
   
-  createCubdexStuff();
-
+  //createJSON_stuff();
+  //console.log(theJSONstuff);
 }
 
 function animate() {
-    if(tickkk<5000){
+    if(tickkk<50000){
       requestAnimationFrame(animate);
       const elapsed = clock.getElapsedTime();
+
+      console.log("The total number of triangles is:" + countMershes());
 
       globalModels[NAMES101[1]].rotation.y += 0.02;
       globalModels[NAMES101[1]].rotation.z += 0.01;
       globalModels[NAMES101[1]].rotation.x += 0.009;
     
+      
 
-
+      theJSONstuff = {} //resetting the JSON stuff each time now
      if (globalModels.sphere) {
       if(tickBool < 200){
         globalModels[NAMES101[0]].position.y += 0.05;
@@ -721,8 +801,6 @@ function animate() {
     }else{
       console.log("no movement yet");
     }
-
-
 
    // loadCubdexes__afterMeshesLoaded();
       // end stuff
